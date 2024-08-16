@@ -41,7 +41,7 @@ dependencies:
   logger: ^2.4.0
   dio_smart_retry: ^6.0.0
   dio: ^5.5.0+1
-  dio_http_cache_fix: ^0.5.1
+  dio_cache_interceptor: ^3.5.0
   
 dev_dependencies:
   flutter_test:

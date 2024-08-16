@@ -3,8 +3,8 @@ import 'package:bridge_info/model/bridge.dart';
 import 'package:bridge_info/model/foot_bridge.dart';
 import 'package:bridge_info/utility/model_unifier.dart';
 import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:dio_smart_retry/dio_smart_retry.dart';
-import 'package:dio_http_cache_fix/dio_http_cache.dart';
 import 'package:logger/logger.dart';
 import 'package:native_dio_adapter/native_dio_adapter.dart';
 
@@ -45,11 +45,7 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
   BridgeDataFetcher() {
     _dio.httpClientAdapter = NativeAdapter(
       createCupertinoConfiguration: () =>
-          URLSessionConfiguration.ephemeralSessionConfiguration()
-            ..allowsCellularAccess = false
-            ..allowsConstrainedNetworkAccess = false
-            ..allowsExpensiveNetworkAccess = false,
-    );
+          URLSessionConfiguration.ephemeralSessionConfiguration());
     _dio.interceptors.add(
       RetryInterceptor(
         dio: _dio,
@@ -59,22 +55,39 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
       ),
     );
 
-    // Configure default cache settings
-    final cacheConfig = CacheConfig();
-    final cacheManager = DioCacheManager(cacheConfig);
+    final options = CacheOptions(
+      store: MemCacheStore(),
 
-    // Add the cache interceptor to Dio
-    _dio.interceptors.add(cacheManager.interceptor);
+      // Default.
+      policy: CachePolicy.request,
+      // Returns a cached response on error but for statuses 401 & 403.
+      // Also allows to return a cached response on network errors (e.g. offline usage).
+      // Defaults to [null].
+      hitCacheOnErrorExcept: const [401, 403],
+      // Overrides any HTTP directive to delete entry past this duration.
+      // Useful only when origin server has no cache config or custom behaviour is desired.
+      // Defaults to [null].
+      maxStale: _cacheDuration,
+      // Default. Allows 3 cache sets and ease cleanup.
+      priority: CachePriority.normal,
+      // Default. Body and headers encryption with your own algorithm.
+      cipher: null,
+      // Default. Key builder to retrieve requests.
+      keyBuilder: CacheOptions.defaultCacheKeyBuilder,
+      // Default. Allows to cache POST requests.
+      // Overriding [keyBuilder] is strongly recommended when [true].
+      allowPostMethod: false,
+    );
+
+    _dio.interceptors.add(DioCacheInterceptor(options: options));
   }
 
   @override
   Future<List<Bridge>?> getBridges() async {
     try {
-      Options cacheOptions = buildCacheOptions(_cacheDuration);
-      final response = await _dio.get(
-          'https://tpnco.blob.core.windows.net/blobfs/Bridges.json',
-          options: cacheOptions);
-      if (response.statusCode == 200) {
+      final response = await _dio
+          .get('https://tpnco.blob.core.windows.net/blobfs/Bridges.json');
+      if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Bridges data fetched successfully");
         if (response.data is String) {
           try {
@@ -109,11 +122,9 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
   @override
   Future<List<Footbridge>?> getFootbridges() async {
     try {
-      Options cacheOptions = buildCacheOptions(_cacheDuration);
       final response = await _dio.get(
-          'https://tpnco.blob.core.windows.net/blobfs/Footbridges.json',
-          options: cacheOptions);
-      if (response.statusCode == 200) {
+          'https://tpnco.blob.core.windows.net/blobfs/Footbridges.json');
+      if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Footbridges data fetched successfully");
         if (response.data is String) {
           try {
