@@ -4,6 +4,7 @@ import 'package:bridge_info/model/foot_bridge.dart';
 import 'package:bridge_info/utility/model_unifier.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
+import 'package:dio_http_cache_fix/dio_http_cache.dart';
 import 'package:dio_smart_retry/dio_smart_retry.dart';
 import 'package:logger/logger.dart';
 import 'package:native_dio_adapter/native_dio_adapter.dart';
@@ -29,7 +30,7 @@ abstract class IBridgeDataFetcher {
 
 class BridgeDataFetcher implements IBridgeDataFetcher {
   static const int _retryCount = 3;
-  static const Duration _cacheDuration = Duration(seconds: 0);
+  static const Duration _cacheDuration = Duration(seconds: 30);
   static const Duration _firstRetryDelay = Duration(seconds: 1);
   static const Duration _secondRetryDelay = Duration(seconds: 2);
   static const Duration _thirdRetryDelay = Duration(seconds: 3);
@@ -55,26 +56,15 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
       ),
     );
 
-    final options = CacheOptions(
-      store: MemCacheStore(),
-      policy: CachePolicy.request,
-      hitCacheOnErrorExcept: const [401, 403],
-      maxStale: _cacheDuration,
-      priority: CachePriority.high,
-      cipher: null,
-      keyBuilder: CacheOptions.defaultCacheKeyBuilder,
-      allowPostMethod: false,
-    );
-
-    _dio.interceptors.add(DioCacheInterceptor(options: options));
-
+    _dio.interceptors.add(DioCacheManager(CacheConfig(baseUrl: "http://tpnco.blob.core.windows.net")).interceptor);
   }
 
   @override
   Future<List<Bridge>?> getBridges() async {
     try {
-      final response = await _dio
-          .get('https://tpnco.blob.core.windows.net/blobfs/Bridges.json');
+      final response = await _dio.get(
+          'https://tpnco.blob.core.windows.net/blobfs/Bridges.json',
+          options: buildCacheOptions(_cacheDuration));
       _logger.i("code: ${response.statusCode}");
       if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Bridges data fetched successfully");
@@ -111,8 +101,9 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
   @override
   Future<List<Footbridge>?> getFootbridges() async {
     try {
-      final response = await _dio
-          .get('https://tpnco.blob.core.windows.net/blobfs/Footbridges.json');
+      final response = await _dio.get(
+          'https://tpnco.blob.core.windows.net/blobfs/Footbridges.json',
+          options: buildCacheOptions(_cacheDuration));
       if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Footbridges data fetched successfully");
         if (response.data is String) {
