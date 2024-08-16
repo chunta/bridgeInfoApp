@@ -29,7 +29,7 @@ abstract class IBridgeDataFetcher {
 
 class BridgeDataFetcher implements IBridgeDataFetcher {
   static const int _retryCount = 3;
-  static const Duration _cacheDuration = Duration(seconds: 30);
+  static const Duration _cacheDuration = Duration(seconds: 0);
   static const Duration _firstRetryDelay = Duration(seconds: 1);
   static const Duration _secondRetryDelay = Duration(seconds: 2);
   static const Duration _thirdRetryDelay = Duration(seconds: 3);
@@ -44,8 +44,8 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
 
   BridgeDataFetcher() {
     _dio.httpClientAdapter = NativeAdapter(
-      createCupertinoConfiguration: () =>
-          URLSessionConfiguration.ephemeralSessionConfiguration());
+        createCupertinoConfiguration: () =>
+            URLSessionConfiguration.ephemeralSessionConfiguration());
     _dio.interceptors.add(
       RetryInterceptor(
         dio: _dio,
@@ -57,29 +57,17 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
 
     final options = CacheOptions(
       store: MemCacheStore(),
-
-      // Default.
       policy: CachePolicy.request,
-      // Returns a cached response on error but for statuses 401 & 403.
-      // Also allows to return a cached response on network errors (e.g. offline usage).
-      // Defaults to [null].
       hitCacheOnErrorExcept: const [401, 403],
-      // Overrides any HTTP directive to delete entry past this duration.
-      // Useful only when origin server has no cache config or custom behaviour is desired.
-      // Defaults to [null].
       maxStale: _cacheDuration,
-      // Default. Allows 3 cache sets and ease cleanup.
-      priority: CachePriority.normal,
-      // Default. Body and headers encryption with your own algorithm.
+      priority: CachePriority.high,
       cipher: null,
-      // Default. Key builder to retrieve requests.
       keyBuilder: CacheOptions.defaultCacheKeyBuilder,
-      // Default. Allows to cache POST requests.
-      // Overriding [keyBuilder] is strongly recommended when [true].
       allowPostMethod: false,
     );
 
     _dio.interceptors.add(DioCacheInterceptor(options: options));
+
   }
 
   @override
@@ -87,6 +75,7 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
     try {
       final response = await _dio
           .get('https://tpnco.blob.core.windows.net/blobfs/Bridges.json');
+      _logger.i("code: ${response.statusCode}");
       if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Bridges data fetched successfully");
         if (response.data is String) {
@@ -122,8 +111,8 @@ class BridgeDataFetcher implements IBridgeDataFetcher {
   @override
   Future<List<Footbridge>?> getFootbridges() async {
     try {
-      final response = await _dio.get(
-          'https://tpnco.blob.core.windows.net/blobfs/Footbridges.json');
+      final response = await _dio
+          .get('https://tpnco.blob.core.windows.net/blobfs/Footbridges.json');
       if (response.statusCode == 200 || response.statusCode == 304) {
         _logger.d("Footbridges data fetched successfully");
         if (response.data is String) {
